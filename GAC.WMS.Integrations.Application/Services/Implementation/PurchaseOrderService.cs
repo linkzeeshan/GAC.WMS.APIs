@@ -494,7 +494,7 @@ namespace GAC.WMS.Integrations.Application.Services.Implementation
             }
         }
 
-        public async Task<ApiResponseDto<List<PurchaseOrderDto>>> GetPurchaseOrdersByCustomerIdAsync(string customerId)
+        public async Task<ApiResponseDto<List<PurchaseOrderDto>>> GetPurchaseOrderByIdAsync(string customerId)
         {
             _logger.LogInformation("Getting purchase orders for customer: {CustomerId}", customerId);
             
@@ -524,6 +524,39 @@ namespace GAC.WMS.Integrations.Application.Services.Implementation
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting purchase orders for customer: {CustomerId}", customerId);
+                return ApiResponseDto<List<PurchaseOrderDto>>.ErrorResponse("Error getting purchase orders", new List<string> { ex.Message });
+            }
+        }
+        public async Task<ApiResponseDto<List<PurchaseOrderDto>>> GetPurchaseOrderPONumberAsync(string pon)
+        {
+            _logger.LogInformation("Getting purchase orders for customer: {purchase order number}", pon);
+
+            try
+            {
+                var purchaseOrderRepository = _unitOfWork.GetRepository<PurchaseOrder, int>();
+                var ourchaseOrder = await purchaseOrderRepository
+                    .GetByCondition(c => c.PONumber == pon)
+                    .FirstOrDefaultAsync();
+
+                if (ourchaseOrder == null)
+                {
+                    _logger.LogWarning("PO number not found: {PON}", pon);
+                    return ApiResponseDto<List<PurchaseOrderDto>>.ErrorResponse($"PO number with ID {pon} not found");
+                }
+
+                
+                var purchaseOrders = await purchaseOrderRepository
+                    .GetByCondition(po => po.PONumber == pon)
+                    .Include(po => po.POLines)
+                        .ThenInclude(pol => pol.Product)
+                    .ToListAsync();
+
+                var purchaseOrderDtos = _mapper.Map<List<PurchaseOrderDto>>(purchaseOrders);
+                return ApiResponseDto<List<PurchaseOrderDto>>.SuccessResponse(purchaseOrderDtos);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting purchase orders for customer: {Po number}", pon);
                 return ApiResponseDto<List<PurchaseOrderDto>>.ErrorResponse("Error getting purchase orders", new List<string> { ex.Message });
             }
         }
